@@ -260,7 +260,7 @@ int main(int argc, char* argv[])
   unsigned long timer_lsb32 = 0;
 
   // output data
-  std::vector<std::vector<Neutron>> events;
+  tbb::concurrent_vector<std::vector<Neutron>> events;
   std::string method_events;
 
   spdlog::debug("@{:p}, {}", raw_data.map, raw_data.max);
@@ -319,11 +319,12 @@ while (raw_data_consumed < raw_data.max) {
       std::vector<TPX3>& batch;
 
       // output vector-of-vector-of-events
-      std::vector<std::vector<Neutron>> output;
+      tbb::concurrent_vector<std::vector<Neutron>>& output;
+      tbb::concurrent_vector<std::vector<Neutron>> working;
 
       // standard and splitting constructor
-      ComputeEvents(char *input, std::size_t range, std::vector<TPX3>& batch) : input(input), range(range), batch(batch), output() {}
-      ComputeEvents(ComputeEvents& body, tbb::split) : input(body.input), range(body.range), batch(body.batch), output() {}
+      ComputeEvents(char *input, std::size_t range, std::vector<TPX3>& batch, tbb::concurrent_vector<std::vector<Neutron>>& output) : input(input), range(range), batch(batch), output(output), working() {}
+      ComputeEvents(ComputeEvents& body, tbb::split) : input(body.input), range(body.range), batch(body.batch), output(body.output), working(body.working) {}
 
       // generate just the range of hits
       void operator()(const tbb::blocked_range<size_t>& r) {
@@ -333,24 +334,20 @@ while (raw_data_consumed < raw_data.max) {
           extractHits(_tpx3, input, range);
           abs_alg_mt->reset();
           abs_alg_mt->fit(_tpx3.hits);
-          output.push_back(abs_alg_mt->get_events(_tpx3.hits));
+          working.push_back(abs_alg_mt->get_events(_tpx3.hits));
         }
       }
 
       // join vectors
       void join(ComputeEvents& rhs) {
-        for (auto& a : rhs.output) {
+        for (auto& a : rhs.working) {
           output.push_back(a);
         }
       }
     };
 
-    ComputeEvents compute(raw_data_ptr, consumed, batches);
+    ComputeEvents compute(raw_data_ptr, consumed, batches, events);
     tbb::parallel_reduce(tbb::blocked_range<size_t>(0, batches.size()), compute);
-    // transfer vectors
-    for (auto& a : compute.output) {
-      events.push_back(a);
-    }
   } else {
     auto abs_alg = std::make_unique<ABS>(5.0, 1, 75);
     for (auto& _tpx3 : batches) {
