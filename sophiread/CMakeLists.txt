@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
-execute_process(COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/version.sh -s print
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    OUTPUT_VARIABLE SOPHIREAD_VERSION)
+IF(WIN32)
+    # TODO: need a way to emulate the version.sh script below for windows
+    project("Sophiread" VERSION "2.0.0")
+ELSE()
+    execute_process(COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/version.sh -s print
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE SOPHIREAD_VERSION)
 
-project("Sophiread" VERSION ${SOPHIREAD_VERSION})
+    project("Sophiread" VERSION ${SOPHIREAD_VERSION})
+ENDIF()
 
 # set(CMAKE_BUILD_TYPE DEBUG)
 set(CMAKE_CXX_STANDARD 20)
@@ -28,6 +33,14 @@ enable_testing()
 include(GoogleTest)
 file(COPY ${CMAKE_SOURCE_DIR}/resources/data DESTINATION ${CMAKE_BINARY_DIR})
 
+IF(WIN32)
+# Add compiler flags
+# https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version?view=msvc-170
+add_compile_options(
+  /O2
+  /std:c++20		# /std:c++latest
+)
+ELSE()
 # Add compiler flags
 add_compile_options(
   -O3
@@ -38,6 +51,7 @@ add_compile_options(
   -Wall
   -Wextra
 )
+ENDIF()
 
 # Add Sophiread library
 # NOTE: this will take care of the testing as well
